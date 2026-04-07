@@ -25,6 +25,3 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["ccsm_eval"]
-
-[tool.uv.extra-build-dependencies]
-      ccsm-eval = ["setuptools.backends"]
