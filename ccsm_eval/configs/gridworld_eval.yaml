@@ -1,0 +1,47 @@
+experiment:
+  name: "gridworld_prior_validation"
+  seed: 42
+  output_dir: "results/gridworld"
+
+environment:
+  type: gridworld
+  min_size: 5
+  max_size: 8
+  wall_density: 0.2
+  max_steps: 100
+  trajectory_counts:
+    optimal: 100
+    near_optimal: 100
+    wandering: 100
+    lost: 100
+    adversarial: 100
+  counterfactual:
+    n_edits_per_trajectory: 2
+    n_sample_trajectories: 100
+
+prompts:
+  navigator:
+    text: "You are an expert navigator finding the shortest path through a grid."
+    aligned: true
+  lost:
+    text: "You are lost and confused, wandering aimlessly through a grid."
+    inverted: true
+  neutral:
+    text: "The following is a description of movement through a grid."
+
+analysis:
+  quality_metrics:
+    - path_optimality
+    - reached_goal
+  surprise_types:
+    - cumulative
+    - normalised
+    - residualised
+  semantic_filters:
+    - all
+    - position_description
+  correlation_method: spearman
+  bootstrap_n: 1000
+  confidence_level: 0.95
+  permutation_null_n: 1000
+  failure_mode_top_n: 20

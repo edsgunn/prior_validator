@@ -1,0 +1,46 @@
+# Model configurations for Phase 1 evaluation
+# Run in order of increasing size for the fast iteration strategy
+
+models:
+  - name: "qwen2.5-1.5b"
+    hf_path: "Qwen/Qwen2.5-1.5B"
+    size_b: 1.5
+    gpus: 1
+    use_vllm: false
+    dtype: bfloat16
+    batch_size: 8
+    max_length: 4096
+
+  - name: "qwen2.5-7b"
+    hf_path: "Qwen/Qwen2.5-7B"
+    size_b: 7.0
+    gpus: 1
+    use_vllm: false
+    dtype: bfloat16
+    batch_size: 4
+    max_length: 4096
+
+  - name: "qwen2.5-72b"
+    hf_path: "Qwen/Qwen2.5-72B"
+    size_b: 72.0
+    gpus: 4
+    use_vllm: false
+    dtype: bfloat16
+    batch_size: 1
+    max_length: 4096
+
+# Fast iteration subset: run this first to get initial signal (~3 hours on 7B)
+fast_iteration:
+  models:
+    - "qwen2.5-7b"
+  environments:
+    - chess
+    - gridworld
+  prompts_per_env:
+    chess:
+      - GM
+      - beginner
+    gridworld:
+      - navigator
+      - lost
+  trajectory_counts: 20   # Override: 20 per quality level for fast iteration

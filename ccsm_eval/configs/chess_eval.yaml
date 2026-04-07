@@ -1,0 +1,59 @@
+experiment:
+  name: "chess_prior_validation"
+  seed: 42
+  output_dir: "results/chess"
+
+environment:
+  type: chess
+  stockfish_path: "stockfish"
+  white_depth: 20
+  opponent_depth: 15
+  max_moves: 120
+  trajectory_counts:
+    optimal: 100
+    strong: 100
+    moderate: 100
+    weak: 100
+    random: 100
+  formats:
+    - fen
+    - natural
+  counterfactual:
+    n_edits_per_trajectory: 2
+    min_quality_delta_cp: 100
+    eval_depth: 15
+    n_sample_trajectories: 100  # Run edits on this many trajectories per level
+
+prompts:
+  GM:
+    text: "You are a chess grandmaster rated 2700 ELO, playing White. You play principled, strategic chess."
+    aligned: true
+  beginner:
+    text: "You are a beginner chess player who just learned the rules. You play White."
+    inverted: true
+  analyst:
+    text: "You are a chess commentator analysing a game between two strong players."
+  neutral:
+    text: "The following is a chess game in algebraic notation."
+  mismatched:
+    text: "You are a world-class poker player watching a chess game."
+    mismatched: true
+
+analysis:
+  quality_metrics:
+    - centipawn_eval
+    - mean_cp_loss
+    - outcome
+  surprise_types:
+    - cumulative
+    - normalised
+    - residualised
+  semantic_filters:
+    - all
+    - opponent_move
+    - board_state
+  correlation_method: spearman
+  bootstrap_n: 1000
+  confidence_level: 0.95
+  permutation_null_n: 1000
+  failure_mode_top_n: 20
