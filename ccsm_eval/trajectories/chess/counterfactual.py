@@ -48,14 +48,14 @@ class ChessCounterfactualEditor(CounterfactualEditor):
     def __init__(
         self,
         stockfish_path: str = "stockfish",
-        eval_depth: int = 15,
-        opponent_depth: int = 15,
+        eval_time: float = 0.05,
+        opponent_time: float = 0.05,
         min_cp_delta: int = DEFAULT_MIN_CP_DELTA,
         n_followup_plies: int = 2,   # How many plies after edit to include in tokens
     ):
         self.stockfish_path = stockfish_path
-        self.eval_depth = eval_depth
-        self.opponent_depth = opponent_depth
+        self.eval_time = eval_time
+        self.opponent_time = opponent_time
         self.min_cp_delta = min_cp_delta
         self.n_followup_plies = n_followup_plies
 
@@ -155,7 +155,7 @@ class ChessCounterfactualEditor(CounterfactualEditor):
         move: chess.Move,
     ) -> tuple[float, float]:
         """Return (best_cp_before, move_cp_after) from White's perspective."""
-        limit = chess.engine.Limit(depth=self.eval_depth)
+        limit = chess.engine.Limit(time=self.eval_time)
         info = engine.analyse(board, limit, multipv=1)
         best_cp = self._to_cp(info[0]["score"].white())
 
@@ -177,7 +177,7 @@ class ChessCounterfactualEditor(CounterfactualEditor):
         """Find a move that is at least min_cp_delta better/worse than the original."""
         legal = list(board.legal_moves)
         n_pv = min(len(legal), 20)
-        limit = chess.engine.Limit(depth=self.eval_depth)
+        limit = chess.engine.Limit(time=self.eval_time)
         info_list = engine.analyse(board, limit, multipv=n_pv)
 
         best_move: chess.Move | None = None
@@ -193,7 +193,7 @@ class ChessCounterfactualEditor(CounterfactualEditor):
 
             b2 = board.copy()
             b2.push(candidate)
-            cand_info = engine.analyse(b2, chess.engine.Limit(depth=self.eval_depth))
+            cand_info = engine.analyse(b2, chess.engine.Limit(time=self.eval_time))
             cand_cp = self._to_cp(cand_info["score"].white())
 
             delta = cand_cp - original_cp  # positive = better for White
@@ -237,7 +237,7 @@ class ChessCounterfactualEditor(CounterfactualEditor):
 
         # Black's response
         if not board.is_game_over():
-            result = engine.play(board, chess.engine.Limit(depth=self.opponent_depth))
+            result = engine.play(board, chess.engine.Limit(time=self.opponent_time))
             black_move = result.move
             if black_move:
                 black_san = board.san(black_move)

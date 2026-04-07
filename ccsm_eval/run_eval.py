@@ -63,8 +63,8 @@ def make_generator(env_config: dict):
         from ccsm_eval.trajectories.chess.generator import ChessTrajectoryGenerator
         return ChessTrajectoryGenerator(
             stockfish_path=env_config.get("stockfish_path", "stockfish"),
-            white_depth=env_config.get("white_depth", 20),
-            opponent_depth=env_config.get("opponent_depth", 15),
+            white_time=env_config.get("white_time", 0.1),
+            opponent_time=env_config.get("opponent_time", 0.05),
             max_moves=env_config.get("max_moves", 120),
         )
     elif env_type == "negotiation":
@@ -89,7 +89,7 @@ def make_quality_scorer(env_type: str, env_config: dict):
         from ccsm_eval.trajectories.chess.quality import ChessQualityScorer
         return ChessQualityScorer(
             stockfish_path=env_config.get("stockfish_path", "stockfish"),
-            eval_depth=env_config.get("opponent_depth", 15),
+            eval_time=env_config.get("eval_time", 0.05),
         )
     elif env_type == "negotiation":
         from ccsm_eval.trajectories.negotiation.quality import NegotiationQualityScorer
@@ -121,8 +121,8 @@ def make_counterfactual_editor(env_type: str, env_config: dict):
         from ccsm_eval.trajectories.chess.counterfactual import ChessCounterfactualEditor
         return ChessCounterfactualEditor(
             stockfish_path=env_config.get("stockfish_path", "stockfish"),
-            eval_depth=cf_cfg.get("eval_depth", 15),
-            opponent_depth=env_config.get("opponent_depth", 15),
+            eval_time=cf_cfg.get("eval_time", 0.05),
+            opponent_time=env_config.get("opponent_time", 0.05),
             min_cp_delta=cf_cfg.get("min_quality_delta_cp", 100),
         )
     elif env_type == "negotiation":

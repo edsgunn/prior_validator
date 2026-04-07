@@ -39,6 +39,14 @@ class TrajectoryGenerator(ABC):
 
 QUALITY_LEVELS = ["optimal", "strong", "moderate", "weak", "random"]
 
+_MATE_CP = 10_000
+
+
+def _score_to_cp(score: chess.engine.PovScore) -> float:
+    if score.is_mate():
+        return float(_MATE_CP) if score.mate() > 0 else float(-_MATE_CP)
+    return float(score.score())
+
 
 class ChessTrajectoryGenerator(TrajectoryGenerator):
     """Generates chess trajectories where White plays at a controlled quality level.
@@ -56,14 +64,14 @@ class ChessTrajectoryGenerator(TrajectoryGenerator):
     def __init__(
         self,
         stockfish_path: str = "stockfish",
-        white_depth: int = 20,
-        opponent_depth: int = 15,
+        white_time: float = 0.1,    # Seconds per move for White's analysis
+        opponent_time: float = 0.05, # Seconds per move for Black
         max_moves: int = 120,       # Half-moves (plies)
         multipv_cache: int = 20,    # How many moves to request from Stockfish
     ):
         self.stockfish_path = stockfish_path
-        self.white_depth = white_depth
-        self.opponent_depth = opponent_depth
+        self.white_time = white_time
+        self.opponent_time = opponent_time
         self.max_moves = max_moves
         self.multipv_cache = multipv_cache
 
@@ -103,8 +111,13 @@ class ChessTrajectoryGenerator(TrajectoryGenerator):
             if board.is_game_over():
                 break
 
+            best_cp: Optional[float] = None
+            move_cp: Optional[float] = None
+
             if board.turn == chess.WHITE:
-                move = self._select_white_move(engine, board, quality_level, rng)
+                move, best_cp, move_cp = self._select_white_move(
+                    engine, board, quality_level, rng
+                )
             else:
                 move = self._select_black_move(engine, board)
 
@@ -116,15 +129,17 @@ class ChessTrajectoryGenerator(TrajectoryGenerator):
             board.push(move)
             fen_after = board.fen()
 
-            move_records.append(
-                {
-                    "uci": move.uci(),
-                    "san": san,
-                    "fen_before": fen_before,
-                    "fen_after": fen_after,
-                    "color": "white" if ply % 2 == 0 else "black",
-                }
-            )
+            record: dict = {
+                "uci": move.uci(),
+                "san": san,
+                "fen_before": fen_before,
+                "fen_after": fen_after,
+                "color": "white" if ply % 2 == 0 else "black",
+            }
+            if best_cp is not None:
+                record["best_cp"] = best_cp
+                record["move_cp"] = move_cp
+            move_records.append(record)
 
         outcome = board.result()  # "1-0", "0-1", "1/2-1/2", or "*"
 
@@ -240,13 +255,14 @@ class ChessTrajectoryGenerator(TrajectoryGenerator):
         board: chess.Board,
         quality_level: str,
         rng: random.Random,
-    ) -> Optional[chess.Move]:
+    ) -> tuple[Optional[chess.Move], Optional[float], Optional[float]]:
+        """Return (move, best_cp, move_cp). cp values are None for random."""
         legal = list(board.legal_moves)
         if not legal:
-            return None
+            return None, None, None
 
         if quality_level == "random":
-            return rng.choice(legal)
+            return rng.choice(legal), None, None
 
         if quality_level == "weak":
             return self._select_weak_move(engine, board, legal, rng)
@@ -257,15 +273,16 @@ class ChessTrajectoryGenerator(TrajectoryGenerator):
 
         info_list = engine.analyse(
             board,
-            chess.engine.Limit(depth=self.white_depth),
+            chess.engine.Limit(time=self.white_time),
             multipv=n_pv,
         )
-        # info_list is sorted best-first
+        # info_list is sorted best-first; score is position value after playing PV[0]
+        best_cp = _score_to_cp(info_list[0]["score"].white())
         chosen_info = rng.choice(info_list)
+        move_cp = _score_to_cp(chosen_info["score"].white())
         pv = chosen_info.get("pv")
-        if pv:
-            return pv[0]
-        return rng.choice(legal)
+        move = pv[0] if pv else rng.choice(legal)
+        return move, best_cp, move_cp
 
     def _select_weak_move(
         self,
@@ -273,25 +290,26 @@ class ChessTrajectoryGenerator(TrajectoryGenerator):
         board: chess.Board,
         legal: list[chess.Move],
         rng: random.Random,
-    ) -> chess.Move:
+    ) -> tuple[chess.Move, float, float]:
         """Select from the bottom half of legal moves by Stockfish score."""
         n = max(1, len(legal))
         n_pv = min(self.multipv_cache, n)
 
         info_list = engine.analyse(
             board,
-            chess.engine.Limit(depth=max(5, self.white_depth // 4)),
+            chess.engine.Limit(time=self.white_time),
             multipv=n_pv,
         )
         # Sorted best-first; take the bottom half
+        best_cp = _score_to_cp(info_list[0]["score"].white())
         bottom = info_list[len(info_list) // 2 :]
         if not bottom:
             bottom = info_list
         chosen = rng.choice(bottom)
+        move_cp = _score_to_cp(chosen["score"].white())
         pv = chosen.get("pv")
-        if pv:
-            return pv[0]
-        return rng.choice(legal)
+        move = pv[0] if pv else rng.choice(legal)
+        return move, best_cp, move_cp
 
     def _select_black_move(
         self,
@@ -301,5 +319,5 @@ class ChessTrajectoryGenerator(TrajectoryGenerator):
         legal = list(board.legal_moves)
         if not legal:
             return None
-        result = engine.play(board, chess.engine.Limit(depth=self.opponent_depth))
+        result = engine.play(board, chess.engine.Limit(time=self.opponent_time))
         return result.move

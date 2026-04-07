@@ -6,8 +6,8 @@ experiment:
 environment:
   type: chess
   stockfish_path: "stockfish"
-  white_depth: 20
-  opponent_depth: 15
+  white_time: 0.1      # seconds per move (depth-20 was ~5-10s/move — 100x slower)
+  opponent_time: 0.05  # seconds per move for Black
   max_moves: 120
   trajectory_counts:
     optimal: 100
@@ -21,7 +21,7 @@ environment:
   counterfactual:
     n_edits_per_trajectory: 2
     min_quality_delta_cp: 100
-    eval_depth: 15
+    eval_time: 0.05
     n_sample_trajectories: 100  # Run edits on this many trajectories per level
 
 prompts:
