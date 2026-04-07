@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "ccsm-eval"
@@ -23,6 +23,8 @@ dependencies = [
     "tqdm>=4.66.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["ccsm_eval*"]
+[tool.hatch.build.targets.wheel]
+packages = ["ccsm_eval"]
+
+[tool.uv.extra-build-dependencies]
+      ccsm-eval = ["setuptools.backends"]
