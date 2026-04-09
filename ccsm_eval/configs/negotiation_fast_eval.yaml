@@ -1,0 +1,45 @@
+experiment:
+  name: "negotiation_fast"
+  seed: 42
+  output_dir: "results/negotiation"
+
+environment:
+  type: negotiation
+  max_rounds: 4
+  trajectory_counts:
+    optimal: 20
+    cooperative_suboptimal: 20
+    aggressive_failed: 20
+    incoherent: 20
+  formats:
+    - templated
+  counterfactual:
+    n_edits_per_trajectory: 1
+    n_sample_trajectories: 20
+  outcome_probe: false
+
+prompts:
+  negotiator:
+    text: "You are a skilled negotiator. You aim to maximise your own score while reaching mutually beneficial agreements."
+    aligned: true
+  aggressive:
+    text: "You are a ruthless negotiator who will accept nothing less than the best possible deal for yourself."
+    inverted: true
+  neutral:
+    text: "The following is a negotiation between two people dividing items."
+
+analysis:
+  quality_metrics:
+    - q_individual
+    - q_pareto
+  surprise_types:
+    - normalised
+    - residualised
+  semantic_filters:
+    - all
+    - opponent_response
+  correlation_method: spearman
+  bootstrap_n: 200
+  confidence_level: 0.95
+  permutation_null_n: 200
+  failure_mode_top_n: 10

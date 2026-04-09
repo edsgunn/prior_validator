@@ -80,14 +80,13 @@ def _load_transformers(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    device_map = "auto" if device not in ("cpu", "mps") else device
     model = AutoModelForCausalLM.from_pretrained(
         hf_path,
-        torch_dtype=torch_dtype,
-        device_map=device if device == "auto" else None,
+        dtype=torch_dtype,
+        device_map=device_map,
         trust_remote_code=True,
     )
-    if device not in ("auto", "cpu"):
-        model = model.to(device)
     model.eval()
 
     logger.info(f"Loaded {hf_path}")

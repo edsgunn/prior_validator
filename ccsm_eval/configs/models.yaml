@@ -20,6 +20,15 @@ models:
     batch_size: 4
     max_length: 4096
 
+  - name: "qwen2.5-7b-it"
+    hf_path: "Qwen/Qwen2.5-7B-Instruct"
+    size_b: 7.0
+    gpus: 1
+    use_vllm: false
+    dtype: bfloat16
+    batch_size: 4
+    max_length: 4096
+
   - name: "qwen2.5-72b"
     hf_path: "Qwen/Qwen2.5-72B"
     size_b: 72.0
@@ -29,6 +38,7 @@ models:
     batch_size: 1
     max_length: 4096
 
+<<<<<<< HEAD
   - name: "qwen3.5-9b"
     hf_path: "Qwen/Qwen3.5-9B"
     size_b: 9.0
@@ -48,12 +58,18 @@ models:
     max_length: 4096
 
 # Fast iteration subset: run this first to get initial signal (~3 hours on 7B)
+=======
+# Fast iteration subset: run this first to get initial signal
+>>>>>>> 644e351 (Add new tests)
 fast_iteration:
   models:
     - "qwen2.5-7b"
+    - "qwen2.5-7b-it"
+    - "qwen2.5-72b"
   environments:
     - chess
     - gridworld
+    - negotiation
   prompts_per_env:
     chess:
       - GM
@@ -61,4 +77,7 @@ fast_iteration:
     gridworld:
       - navigator
       - lost
+    negotiation:
+      - negotiator
+      - aggressive
   trajectory_counts: 20   # Override: 20 per quality level for fast iteration

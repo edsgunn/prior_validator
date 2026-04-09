@@ -27,6 +27,7 @@ Pipeline:
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import logging
 import os
@@ -391,7 +392,17 @@ def run_analysis(
     }
 
 
-def save_results(results: dict, output_dir: str, name: str) -> None:
+def _serialise(obj):
+    if hasattr(obj, "__dataclass_fields__"):
+        return {k: _serialise(v) for k, v in vars(obj).items()}
+    elif isinstance(obj, list):
+        return [_serialise(v) for v in obj]
+    elif isinstance(obj, dict):
+        return {k: _serialise(v) for k, v in obj.items()}
+    return obj
+
+
+def save_results(results: dict, output_dir: str, name: str, metadata: dict) -> None:
     """Save results to JSON and generate text report."""
     from ccsm_eval.reporting.tables import (
         correlation_table_latex,
@@ -401,8 +412,13 @@ def save_results(results: dict, output_dir: str, name: str) -> None:
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
+    # Write metadata so every output directory is self-describing
+    meta_path = os.path.join(output_dir, f"{name}_metadata.json")
+    with open(meta_path, "w") as f:
+        json.dump(metadata, f, indent=2)
+
     # Text summary
-    report = summary_text_report(results)
+    report = summary_text_report(results, metadata)
     report_path = os.path.join(output_dir, f"{name}_report.txt")
     with open(report_path, "w") as f:
         f.write(report)
@@ -420,24 +436,44 @@ def save_results(results: dict, output_dir: str, name: str) -> None:
             f.write(latex)
 
     # JSON results (serialise dataclasses to dicts)
-    def _serialise(obj):
-        if hasattr(obj, "__dataclass_fields__"):
-            return {k: _serialise(v) for k, v in vars(obj).items()}
-        elif isinstance(obj, list):
-            return [_serialise(v) for v in obj]
-        elif isinstance(obj, dict):
-            return {k: _serialise(v) for k, v in obj.items()}
-        return obj
-
     json_path = os.path.join(output_dir, f"{name}_results.json")
     with open(json_path, "w") as f:
-        json.dump(_serialise(results), f, indent=2)
+        json.dump({"metadata": metadata, "results": _serialise(results)}, f, indent=2)
     logger.info(f"Results saved to {json_path}")
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+def _find_latest_run(base_output_dir: str) -> Optional[str]:
+    """Return the run_id of the most recent run under base_output_dir/runs/, or None."""
+    runs_dir = Path(base_output_dir) / "runs"
+    if not runs_dir.exists():
+        return None
+    candidates = sorted(
+        (d.name for d in runs_dir.iterdir() if d.is_dir()),
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+def _checkpoint_path(checkpoint_dir: str, exp_name: str, model_name: str) -> str:
+    return os.path.join(checkpoint_dir, f"{exp_name}__{model_name}.pkl")
+
+
+def _load_checkpoint(path: str) -> Optional[dict]:
+    if os.path.exists(path):
+        with open(path, "rb") as f:
+            return pickle.load(f)
+    return None
+
+
+def _save_checkpoint(path: str, surprise_results: list, cf_results: list) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as f:
+        pickle.dump({"surprise_results": surprise_results, "cf_results": cf_results}, f)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -447,6 +483,17 @@ def main():
     parser.add_argument("--models", required=True, help="Models config YAML")
     parser.add_argument(
         "--output", default=None, help="Output directory (overrides config)"
+    )
+    parser.add_argument(
+        "--run-id", default=None,
+        help="Unique run identifier (default: timestamp). "
+             "Results are written to <output>/runs/<run-id>/",
+    )
+    parser.add_argument(
+        "--resume-latest", action="store_true",
+        help="Continue the most recent run: reuse its run-id and output directory. "
+             "Models already checkpointed are skipped; new models are added and the "
+             "full combined analysis is re-written into the same directory.",
     )
     parser.add_argument(
         "--fast-iteration", action="store_true",
@@ -461,6 +508,10 @@ def main():
         help="Skip counterfactual edits"
     )
     parser.add_argument(
+        "--rerun-models", nargs="*", default=None, metavar="MODEL",
+        help="Force re-evaluation of these model names even if checkpoints exist"
+    )
+    parser.add_argument(
         "--seed", type=int, default=None, help="Override random seed"
     )
     args = parser.parse_args()
@@ -471,8 +522,21 @@ def main():
 
     seed = args.seed or env_cfg.get("experiment", {}).get("seed", 42)
     exp_name = env_cfg.get("experiment", {}).get("name", "eval")
-    output_dir = args.output or env_cfg.get("experiment", {}).get("output_dir", "results")
+    base_output_dir = args.output or env_cfg.get("experiment", {}).get("output_dir", "results")
     env_type = env_cfg["environment"]["type"]
+
+    if args.resume_latest:
+        latest = _find_latest_run(base_output_dir)
+        if latest is None:
+            logger.warning("--resume-latest: no previous run found, starting a new one.")
+            run_id = args.run_id or datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        else:
+            run_id = args.run_id or latest
+            logger.info(f"--resume-latest: continuing run {run_id!r}")
+    else:
+        run_id = args.run_id or datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_output_dir = os.path.join(base_output_dir, "runs", run_id)
+    checkpoint_dir = os.path.join(base_output_dir, "checkpoints")
 
     # Apply fast iteration overrides
     if args.fast_iteration:
@@ -488,6 +552,8 @@ def main():
         model_names = [m["name"] for m in models_cfg["models"]]
         prompt_override = None
         traj_count_override = None
+
+    rerun_set = set(args.rerun_models or [])
 
     # Environment components
     generator = make_generator(env_cfg["environment"])
@@ -521,10 +587,10 @@ def main():
     if traj_count_override:
         traj_counts = {level: traj_count_override for level in traj_counts}
 
-    # Cache path
-    cache_path = os.path.join(output_dir, "cache", f"{exp_name}_trajectories.pkl")
+    # Trajectory cache lives in the base output dir so it's shared across runs
+    cache_path = os.path.join(base_output_dir, "cache", f"{exp_name}_trajectories.pkl")
 
-    # Generate trajectories (once, shared across all models)
+    # Generate trajectories (once, shared across all models and runs)
     logger.info("Step 1: Generating trajectories ...")
     trajectories_by_level = generate_and_score_trajectories(
         generator,
@@ -553,6 +619,8 @@ def main():
     all_surprise_results = []
     all_cf_results = []
     model_sizes_b: dict[str, float] = {}
+    models_evaluated: list[str] = []
+    models_from_checkpoint: list[str] = []
 
     for model_cfg in models_cfg["models"]:
         if model_cfg["name"] not in model_names:
@@ -560,6 +628,25 @@ def main():
 
         model_name = model_cfg["name"]
         model_sizes_b[model_name] = model_cfg.get("size_b", 0.0)
+
+        ckpt_path = _checkpoint_path(checkpoint_dir, exp_name, model_name)
+
+        # Use checkpoint if available (unless explicitly asked to rerun)
+        if model_name not in rerun_set:
+            cached = _load_checkpoint(ckpt_path)
+            if cached is not None:
+                logger.info(
+                    f"\n{'=' * 60}\n"
+                    f"Skipping model {model_name!r} — checkpoint found at {ckpt_path}\n"
+                    f"  surprise_results={len(cached['surprise_results'])}, "
+                    f"cf_results={len(cached['cf_results'])}\n"
+                    f"{'=' * 60}"
+                )
+                all_surprise_results.extend(cached["surprise_results"])
+                all_cf_results.extend(cached["cf_results"])
+                models_from_checkpoint.append(model_name)
+                continue
+
         logger.info(f"\n{'=' * 60}")
         logger.info(f"Step 2: Evaluating model {model_name!r}")
         logger.info(f"{'=' * 60}")
@@ -587,8 +674,8 @@ def main():
             formatters,
             env_type,
         )
-        all_surprise_results.extend(surprise_results)
 
+        cf_results: list = []
         if not args.skip_counterfactuals:
             logger.info("Step 4: Running counterfactual edits ...")
             cf_results = run_counterfactual_edits(
@@ -601,7 +688,14 @@ def main():
                 n_sample_trajectories=n_sample_cf,
                 seed=seed,
             )
-            all_cf_results.extend(cf_results)
+
+        # Checkpoint this model's results so future runs can skip it
+        _save_checkpoint(ckpt_path, surprise_results, cf_results)
+        logger.info(f"Checkpoint saved to {ckpt_path}")
+
+        all_surprise_results.extend(surprise_results)
+        all_cf_results.extend(cf_results)
+        models_evaluated.append(model_name)
 
         # Free GPU memory between models
         del evaluator, loaded_model
@@ -612,6 +706,27 @@ def main():
             torch.cuda.empty_cache()
         except Exception:
             pass
+
+    # Build run metadata (written into every output file)
+    run_metadata = {
+        "run_id": run_id,
+        "timestamp": datetime.datetime.now().isoformat(),
+        "exp_name": exp_name,
+        "env_type": env_type,
+        "env_config": str(Path(args.config).resolve()),
+        "models_config": str(Path(args.models).resolve()),
+        "fast_iteration": args.fast_iteration,
+        "seed": seed,
+        "prompts": list(prompts.keys()),
+        "aligned_prompt": aligned_prompt,
+        "inverted_prompt": inverted_prompt,
+        "mismatched_prompt": mismatched_prompt,
+        "trajectory_counts": traj_counts,
+        "models_evaluated_fresh": models_evaluated,
+        "models_loaded_from_checkpoint": models_from_checkpoint,
+        "total_surprise_results": len(all_surprise_results),
+        "total_cf_results": len(all_cf_results),
+    }
 
     # Analysis
     logger.info("\nStep 5: Running analysis ...")
@@ -629,7 +744,8 @@ def main():
     )
 
     # Scaling analysis (across models)
-    if len(model_names) > 1:
+    evaluated_model_names = models_evaluated + models_from_checkpoint
+    if len(evaluated_model_names) > 1:
         from ccsm_eval.analysis.scaling import analyse_scaling
         scaling_results = []
         by_model_corrs: dict[str, list] = {}
@@ -647,15 +763,15 @@ def main():
     analysis_results["surprise_results"] = all_surprise_results
     analysis_results["counterfactual_raw"] = all_cf_results
 
-    # Save
-    logger.info("\nStep 6: Saving results ...")
-    save_results(analysis_results, output_dir, exp_name)
+    # Save — each run gets its own directory under runs/
+    logger.info(f"\nStep 6: Saving results to {run_output_dir} ...")
+    save_results(analysis_results, run_output_dir, exp_name, run_metadata)
 
     # Figures
     logger.info("Step 7: Generating figures ...")
     try:
         from ccsm_eval.reporting.figures import save_all_figures
-        figures_dir = os.path.join(output_dir, "figures")
+        figures_dir = os.path.join(run_output_dir, "figures")
         save_all_figures({"by_environment": {env_type: {"by_prompt": {
             r.prompt_id: {"surprise_results": [
                 s for s in all_surprise_results if s.prompt_id == r.prompt_id
@@ -664,7 +780,7 @@ def main():
     except Exception as e:
         logger.warning(f"Figure generation failed: {e}")
 
-    logger.info("Done.")
+    logger.info(f"Done. Run ID: {run_id}")
 
 
 if __name__ == "__main__":

@@ -27,17 +27,17 @@ def correlation_table_latex(
         r"\centering",
         r"\caption{" + caption + "}",
         r"\label{" + label + "}",
-        r"\begin{tabular}{llllrrrrr}",
+        r"\begin{tabular}{lllllllrrrrr}",
         r"\toprule",
-        r"Env & Prompt & Quality & Surprise & $\rho$ & $p$ & CI$_{95}$ & Perm-$p$ & $n$ \\",
+        r"Env & Model & Prompt & Quality & Surprise & Semantic & $\rho$ & $p$ & CI$_{95}$ & Perm-$p$ & $n$ \\",
         r"\midrule",
     ]
 
     for r in results:
         ci = f"[{_fmt(r.ci_low)}, {_fmt(r.ci_high)}]"
         lines.append(
-            f"{r.environment} & {r.prompt_id} & {r.quality_metric} & "
-            f"{r.surprise_type} & {_fmt(r.rho)} & {_fmt(r.p_value)} & "
+            f"{r.environment} & {r.model_id} & {r.prompt_id} & {r.quality_metric} & "
+            f"{r.surprise_type} & {r.semantic_filter} & {_fmt(r.rho)} & {_fmt(r.p_value)} & "
             f"{ci} & {_fmt(r.permutation_p)} & {r.n_trajectories} \\\\"
         )
 
@@ -146,21 +146,41 @@ def scaling_table_latex(
     return "\n".join(lines)
 
 
-def summary_text_report(all_results: dict) -> str:
+def summary_text_report(all_results: dict, metadata: Optional[dict] = None) -> str:
     """Generate a human-readable plain-text summary of the evaluation."""
     lines = ["=" * 70, "CCSM Phase 1: Prior Quality Validation — Summary", "=" * 70, ""]
+
+    # Embed run metadata at the top so the file is self-describing
+    if metadata:
+        lines.append("RUN INFO")
+        lines.append("-" * 40)
+        for key in ("run_id", "timestamp", "exp_name", "env_type", "fast_iteration", "seed"):
+            if key in metadata:
+                lines.append(f"  {key}: {metadata[key]}")
+        if metadata.get("models_evaluated_fresh"):
+            lines.append(f"  models (fresh):      {metadata['models_evaluated_fresh']}")
+        if metadata.get("models_loaded_from_checkpoint"):
+            lines.append(f"  models (checkpoint): {metadata['models_loaded_from_checkpoint']}")
+        lines.append(f"  prompts: {metadata.get('prompts', [])}")
+        lines.append("")
 
     corr_results = all_results.get("correlation_results", [])
     if corr_results:
         lines.append("CORRELATION RESULTS")
         lines.append("-" * 40)
+        lines.append(
+            f"  {'':2s} {'env':12s} | {'model':20s} | {'prompt':12s} | "
+            f"{'quality':20s} | {'surprise':12s} | {'semantic':18s} | "
+            f"{'ρ':>7s}  {'p':>7s}  CI"
+        )
+        lines.append("  " + "-" * 120)
         for r in corr_results:
             sig = "**" if r.p_value < 0.05 else "  "
             lines.append(
-                f"{sig} {r.environment:12s} | {r.prompt_id:15s} | "
-                f"{r.quality_metric:20s} | "
-                f"ρ={r.rho:+.3f} p={r.p_value:.3f} "
-                f"CI=[{r.ci_low:+.3f},{r.ci_high:+.3f}]"
+                f"  {sig} {r.environment:12s} | {r.model_id:20s} | {r.prompt_id:12s} | "
+                f"{r.quality_metric:20s} | {r.surprise_type:12s} | {r.semantic_filter:18s} | "
+                f"ρ={r.rho:+.3f}  p={r.p_value:.3f}  "
+                f"[{r.ci_low:+.3f},{r.ci_high:+.3f}]"
             )
         lines.append("")
 
@@ -170,7 +190,7 @@ def summary_text_report(all_results: dict) -> str:
         lines.append("-" * 40)
         for r in cf_results:
             lines.append(
-                f"  {r.environment:12s} | {r.prompt_id:15s} | "
+                f"  {r.environment:12s} | {r.model_id:20s} | {r.prompt_id:12s} | dir={r.direction} | "
                 f"sign_consistency={r.sign_consistency:.1%} "
                 f"effect_size={r.effect_size:.2f} "
                 f"ρ(ΔQ,ΔS)={r.rho_quality_vs_delta_surprise:+.3f}"

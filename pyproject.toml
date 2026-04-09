@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "python-chess>=1.999",
     "stockfish>=3.28.0",
-    "torch>=2.1.0",
+    "torch==2.6.0+cu126",
     "transformers>=4.40.0",
     "accelerate>=0.28.0",
     "scipy>=1.12.0",
@@ -27,3 +27,6 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["ccsm_eval"]
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu126"

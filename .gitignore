@@ -39,6 +39,7 @@ results/
 *.gguf
 *.ggml
 .cache/
+results/
 
 # OS
 .DS_Store
@@ -52,6 +53,7 @@ Thumbs.db
 # SLURM
 slurm_*.log
 *.slurm.out
+core
 
 # Secrets
 .env
