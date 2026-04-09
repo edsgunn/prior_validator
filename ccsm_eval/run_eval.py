@@ -80,6 +80,17 @@ def make_generator(env_config: dict):
             wall_density=env_config.get("wall_density", 0.2),
             max_steps=env_config.get("max_steps", 100),
         )
+    elif env_type == "concordia":
+        from ccsm_eval.trajectories.concordia.generator import ConcordiaTrajectoryGenerator
+        provider = env_config.get("provider", "anthropic")
+        return ConcordiaTrajectoryGenerator(
+            scenario_name=env_config.get("scenario_name", "resource_division"),
+            model=env_config.get("model", env_config.get("anthropic_model", "claude-sonnet-4-20250514")),
+            provider=provider,
+            api_key=env_config.get("api_key"),
+            npc_quality_level=env_config.get("npc_quality_level", "moderate"),
+            save_dir=env_config.get("raw_log_dir") if env_config.get("save_raw_logs") else None,
+        )
     else:
         raise ValueError(f"Unknown environment type: {env_type!r}")
 
@@ -97,6 +108,9 @@ def make_quality_scorer(env_type: str, env_config: dict):
     elif env_type == "gridworld":
         from ccsm_eval.trajectories.gridworld.quality import GridworldQualityScorer
         return GridworldQualityScorer()
+    elif env_type == "concordia":
+        from ccsm_eval.trajectories.concordia.quality_scorer import ConcordiaQualityScorer
+        return ConcordiaQualityScorer()
     else:
         raise ValueError(f"Unknown environment type: {env_type!r}")
 
@@ -111,6 +125,9 @@ def make_formatter(env_type: str, fmt: str):
     elif env_type == "gridworld":
         from ccsm_eval.trajectories.gridworld.formatter import GridworldFormatter
         return GridworldFormatter()
+    elif env_type == "concordia":
+        from ccsm_eval.trajectories.concordia.formatter import ConcordiaFormatter
+        return ConcordiaFormatter()
     else:
         raise ValueError(f"Unknown environment type: {env_type!r}")
 
@@ -131,6 +148,15 @@ def make_counterfactual_editor(env_type: str, env_config: dict):
     elif env_type == "gridworld":
         from ccsm_eval.trajectories.gridworld.counterfactual import GridworldCounterfactualEditor
         return GridworldCounterfactualEditor()
+    elif env_type == "concordia":
+        from ccsm_eval.trajectories.concordia.counterfactual import ConcordiaCounterfactualEditor
+        env_config_local = env_config if isinstance(env_config, dict) else {}
+        provider = env_config_local.get("provider", "anthropic")
+        return ConcordiaCounterfactualEditor(
+            model=env_config_local.get("model", env_config_local.get("anthropic_model", "claude-sonnet-4-20250514")),
+            provider=provider,
+            api_key=env_config_local.get("api_key"),
+        )
     else:
         raise ValueError(f"Unknown environment type: {env_type!r}")
 

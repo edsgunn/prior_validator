@@ -29,6 +29,24 @@ models:
     batch_size: 1
     max_length: 4096
 
+  - name: "qwen3.5-9b"
+    hf_path: "Qwen/Qwen3.5-9B"
+    size_b: 9.0
+    gpus: 1
+    use_vllm: false
+    dtype: bfloat16
+    batch_size: 8
+    max_length: 4096
+
+  - name: "qwen3.5-27b"
+    hf_path: "Qwen/Qwen3.5-27B"
+    size_b: 27.0
+    gpus: 4
+    use_vllm: false
+    dtype: bfloat16
+    batch_size: 8
+    max_length: 4096
+
 # Fast iteration subset: run this first to get initial signal (~3 hours on 7B)
 fast_iteration:
   models:

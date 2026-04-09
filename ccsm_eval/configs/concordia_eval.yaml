@@ -1,0 +1,76 @@
+experiment:
+  name: "concordia_prior_validation"
+  seed: 42
+  output_dir: "results/concordia"
+
+environment:
+  type: concordia
+  scenario_name: "resource_division"   # resource_division | public_goods | stag_hunt
+  provider: "openai"                   # anthropic | openai
+  model: "gpt-5.4"                     # anthropic: claude-sonnet-4-20250514 | openai: gpt-5.4
+  npc_quality_level: "moderate"
+  save_raw_logs: true
+  raw_log_dir: "data/concordia_trajectories"
+  trajectory_counts:
+    expert: 50
+    moderate: 50
+    poor: 50
+    random: 50
+  formats:
+    - text
+  counterfactual:
+    n_edits_per_trajectory: 2
+    n_sample_trajectories: 50
+
+prompts:
+  expert:
+    text: "You are a skilled negotiator participating in a resource allocation scenario. You seek fair, mutually beneficial outcomes."
+    aligned: true
+  naive:
+    text: "You are participating in a game you don't really understand. You're not sure what to do."
+    inverted: true
+  neutral:
+    text: "The following is a transcript of a multi-player interaction scenario."
+
+analysis:
+  quality_metrics:
+    - payoff
+    - social_welfare
+    - cooperation_score
+  surprise_types:
+    - cumulative
+    - normalised
+    - residualised
+  semantic_filters:
+    - all
+    - outcome
+    - other_agent_statement
+  correlation_method: spearman
+  bootstrap_n: 1000
+  confidence_level: 0.95
+  permutation_null_n: 1000
+  failure_mode_top_n: 20
+
+# Scenario-specific overrides for public_goods and stag_hunt
+scenarios:
+  public_goods:
+    prompts:
+      expert:
+        text: "You are an experienced participant in a public goods game. You understand the incentives and act strategically to maximise collective welfare."
+        aligned: true
+      naive:
+        text: "You are playing a resource-sharing game you don't fully understand. You act on gut instinct."
+        inverted: true
+      neutral:
+        text: "The following is a transcript of a multi-player public goods game."
+
+  stag_hunt:
+    prompts:
+      expert:
+        text: "You are a skilled coordination game player who understands the value of trust and commitment in achieving mutually beneficial outcomes."
+        aligned: true
+      naive:
+        text: "You are playing a coordination game for the first time. You're not sure whether to trust the other player."
+        inverted: true
+      neutral:
+        text: "The following is a transcript of a two-player coordination game."
