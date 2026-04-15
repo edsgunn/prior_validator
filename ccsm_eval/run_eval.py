@@ -414,6 +414,7 @@ def _serialise(obj):
 def save_results(results: dict, output_dir: str, name: str, metadata: dict) -> None:
     """Save results to JSON and generate text report."""
     from ccsm_eval.reporting.tables import (
+        absolute_surprise_latex,
         correlation_table_latex,
         counterfactual_table_latex,
         summary_text_report,
@@ -434,6 +435,11 @@ def save_results(results: dict, output_dir: str, name: str, metadata: dict) -> N
     print(report)
 
     # LaTeX tables
+    if results.get("absolute_surprise_results"):
+        latex = absolute_surprise_latex(results["absolute_surprise_results"])
+        with open(os.path.join(output_dir, f"{name}_absolute_surprise.tex"), "w") as f:
+            f.write(latex)
+
     if results.get("correlation_results"):
         latex = correlation_table_latex(results["correlation_results"])
         with open(os.path.join(output_dir, f"{name}_correlations.tex"), "w") as f:
@@ -778,6 +784,11 @@ def main():
 
     analysis_results["surprise_results"] = all_surprise_results
     analysis_results["counterfactual_raw"] = all_cf_results
+
+    # Absolute surprise analysis (no new inference — pure re-aggregation)
+    from ccsm_eval.analysis.absolute_surprise import compute_absolute_surprise
+    abs_surprise_results = compute_absolute_surprise(all_surprise_results)
+    analysis_results["absolute_surprise_results"] = abs_surprise_results
 
     # Save — each run gets its own directory under runs/
     logger.info(f"\nStep 6: Saving results to {run_output_dir} ...")
