@@ -31,6 +31,8 @@ htmlcov/
 # Training runs (large, machine-generated)
 runs/
 results/
+data/
+human_data/
 
 # Model weights and HuggingFace cache
 *.pt

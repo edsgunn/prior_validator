@@ -38,6 +38,8 @@ def load_model(
     use_vllm: bool = False,
     gpu_memory_utilization: float = 0.85,
     max_model_len: Optional[int] = None,
+    tensor_parallel_size: int = 1,
+    pipeline_parallel_size: int = 1,
 ) -> LoadedModel:
     """Load a pretrained model for inference.
 
@@ -63,7 +65,8 @@ def load_model(
 
     if use_vllm:
         return _load_vllm(
-            model_name, hf_path, gpu_memory_utilization, max_model_len
+            model_name, hf_path, gpu_memory_utilization, max_model_len,
+            tensor_parallel_size, pipeline_parallel_size,
         )
     else:
         return _load_transformers(model_name, hf_path, device, torch_dtype)
@@ -104,18 +107,26 @@ def _load_vllm(
     hf_path: str,
     gpu_memory_utilization: float,
     max_model_len: Optional[int],
+    tensor_parallel_size: int = 1,
+    pipeline_parallel_size: int = 1,
 ) -> LoadedModel:
     from vllm import LLM
     from transformers import AutoTokenizer
 
-    logger.info(f"Loading {hf_path} with vLLM ...")
+    tp = tensor_parallel_size
+    pp = pipeline_parallel_size
+    logger.info(f"Loading {hf_path} with vLLM (tp={tp}, pp={pp}) ...")
     kwargs = dict(
         model=hf_path,
         gpu_memory_utilization=gpu_memory_utilization,
+        tensor_parallel_size=tp,
+        pipeline_parallel_size=pp,
         trust_remote_code=True,
     )
     if max_model_len is not None:
         kwargs["max_model_len"] = max_model_len
+    if tp * pp > 1:
+        kwargs["distributed_executor_backend"] = "ray"
 
     llm = LLM(**kwargs)
     tokenizer = AutoTokenizer.from_pretrained(hf_path, trust_remote_code=True)

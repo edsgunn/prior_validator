@@ -69,6 +69,14 @@ def make_generator(env_config: dict):
             max_moves=env_config.get("max_moves", 120),
         )
     elif env_type == "negotiation":
+        if env_config.get("use_human_data", False):
+            from ccsm_eval.trajectories.negotiation.human_generator import (
+                HumanNegotiationTrajectoryGenerator,
+            )
+            return HumanNegotiationTrajectoryGenerator(
+                data_dir=env_config.get("data_dir"),
+                split=env_config.get("split", "train"),
+            )
         from ccsm_eval.trajectories.negotiation.generator import NegotiationTrajectoryGenerator
         return NegotiationTrajectoryGenerator(
             max_rounds=env_config.get("max_rounds", 10),
@@ -316,14 +324,15 @@ def run_analysis(
     failure_cases = []
     prompt_sensitivity_results = []
 
-    # Group by prompt + model
+    # Group by prompt + model + format
     by_prompt: dict[str, list] = {}
     for r in surprise_results:
-        key = f"{r.prompt_id}::{r.model_id}"
+        fmt = r.metadata.get("format", "")
+        key = f"{r.prompt_id}::{r.model_id}::{fmt}"
         by_prompt.setdefault(key, []).append(r)
 
     for key, results_group in by_prompt.items():
-        prompt_id, model_id = key.split("::", 1)
+        prompt_id, model_id, _ = key.split("::", 2)
 
         for qm in quality_metrics:
             for st in surprise_types:
@@ -553,6 +562,11 @@ def main():
         prompt_override = None
         traj_count_override = None
 
+    # Per-config model override (env yaml can pin specific models regardless of fast_iteration)
+    if "models" in env_cfg.get("experiment", {}):
+        model_names = env_cfg["experiment"]["models"]
+        logger.info(f"Using models from env config: {model_names}")
+
     rerun_set = set(args.rerun_models or [])
 
     # Environment components
@@ -659,6 +673,8 @@ def main():
             hf_path=model_cfg["hf_path"],
             dtype=model_cfg.get("dtype", "bfloat16"),
             use_vllm=model_cfg.get("use_vllm", False),
+            tensor_parallel_size=model_cfg.get("tensor_parallel_size", 1),
+            pipeline_parallel_size=model_cfg.get("pipeline_parallel_size", 1),
         )
         evaluator = SurpriseEvaluator(
             loaded_model,

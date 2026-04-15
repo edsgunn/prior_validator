@@ -210,14 +210,22 @@ class OpenAILanguageModel(LanguageModel):
         temp = temperature if temperature is not None else self._temperature
         stop_seqs = terminators or None
 
+        # Newer OpenAI models (o-series, gpt-5.x) use max_completion_tokens
+        _use_completion_tokens = any(
+            self._model.startswith(p) for p in ("o1", "o3", "o4", "gpt-5")
+        )
+        tokens_key = "max_completion_tokens" if _use_completion_tokens else "max_tokens"
+
         for attempt in range(self._max_retries):
             try:
                 kwargs: dict = dict(
                     model=self._model,
-                    max_tokens=max_tokens,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=temp,
+                    **{tokens_key: max_tokens},
                 )
+                # o-series models don't support temperature
+                if not _use_completion_tokens:
+                    kwargs["temperature"] = temp
                 if stop_seqs:
                     kwargs["stop"] = stop_seqs
                 if seed is not None:

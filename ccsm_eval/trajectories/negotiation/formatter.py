@@ -210,10 +210,93 @@ class NaturalLanguageNegotiationFormatter:
         return ", ".join(parts) if parts else "nothing"
 
 
+class HumanDataNegotiationFormatter:
+    """Formatter for human trajectories from Lewis et al. 2017.
+
+    Preserves real dialogue text verbatim. Action tokens are YOU's utterances;
+    observation tokens are the game setup, THEM's utterances, and the outcome.
+
+    Produces a single flat string with the structure:
+        [Setup]
+        Items to divide: ...  Your private values: ...
+
+        [Dialogue]
+        Them: <text>
+        You: <text>
+        ...
+
+        [Outcome]
+        Deal reached / No deal.
+    """
+
+    def format(
+        self, trajectory: Trajectory, character_prompt: str
+    ) -> tuple[str, list[bool], list[str]]:
+        text_parts: list[str] = []
+        mask_parts: list[list[bool]] = []
+        type_parts: list[list[str]] = []
+
+        if character_prompt.strip():
+            _append(text_parts, mask_parts, type_parts,
+                    character_prompt.strip() + "\n\n", False, "prompt")
+
+        meta = trajectory.metadata
+
+        # --- Setup block (observation) ---
+        counts = meta.get("counts", {})
+        you_vals = meta.get("you_vals", {})
+        from ccsm_eval.trajectories.negotiation.human_generator import ITEMS
+        items_desc = ", ".join(f"{counts.get(item, 0)} {item}s" for item in ITEMS)
+        vals_desc = ", ".join(
+            f"{item}={you_vals.get(item, 0)}pt" for item in ITEMS
+        )
+        setup = f"[Setup]\nItems to divide: {items_desc}.\nYour private values: {vals_desc}.\n\n"
+        _append(text_parts, mask_parts, type_parts, setup, True, "game_state")
+
+        # --- Dialogue block ---
+        turns = meta.get("turns", [])
+        if turns:
+            _append(text_parts, mask_parts, type_parts, "[Dialogue]\n", True, "game_state")
+            for turn in turns:
+                is_obs = turn["speaker"] == "them"
+                sem_type = "opponent_utterance" if is_obs else "agent_utterance"
+                speaker = "Them" if is_obs else "You"
+                line = f"{speaker}: {turn['text']}\n"
+                _append(text_parts, mask_parts, type_parts, line, is_obs, sem_type)
+            _append(text_parts, mask_parts, type_parts, "\n", True, "game_state")
+
+        # --- Outcome block (observation) ---
+        deal = meta.get("deal")
+        if deal is not None:
+            you_parts = ", ".join(
+                f"{deal['you_gets'].get(item, 0)} {item}s" for item in ITEMS
+            )
+            them_parts = ", ".join(
+                f"{deal['them_gets'].get(item, 0)} {item}s" for item in ITEMS
+            )
+            you_norm = meta.get("you_utility_norm", 0.0)
+            pareto = meta.get("pareto_efficiency", 0.0)
+            outcome_text = (
+                f"[Outcome]\nDeal reached.\n"
+                f"You get: {you_parts}.\n"
+                f"They get: {them_parts}.\n"
+                f"Your score: {you_norm:.0%} of maximum. Joint efficiency: {pareto:.0%}.\n"
+            )
+        else:
+            outcome_text = "[Outcome]\nNo deal. Both players score zero.\n"
+        _append(text_parts, mask_parts, type_parts, outcome_text, True, "outcome")
+
+        return _assemble(text_parts, mask_parts, type_parts)
+
+
 def make_negotiation_formatter(fmt: str):
     if fmt == "templated":
         return TemplatedNegotiationFormatter()
     elif fmt == "natural":
         return NaturalLanguageNegotiationFormatter()
+    elif fmt == "human":
+        return HumanDataNegotiationFormatter()
     else:
-        raise ValueError(f"Unknown negotiation format: {fmt!r}. Choose 'templated' or 'natural'.")
+        raise ValueError(
+            f"Unknown negotiation format: {fmt!r}. Choose 'templated', 'natural', or 'human'."
+        )

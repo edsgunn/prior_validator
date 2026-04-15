@@ -2,12 +2,15 @@ experiment:
   name: "concordia_prior_validation"
   seed: 42
   output_dir: "results/concordia"
+  models:                              # Evaluation models (surprise scoring)
+    - "qwen3.5-9b"
+    - "qwen3.5-27b"
 
 environment:
   type: concordia
   scenario_name: "resource_division"   # resource_division | public_goods | stag_hunt
-  provider: "openai"                   # anthropic | openai
-  model: "gpt-5.4"                     # anthropic: claude-sonnet-4-20250514 | openai: gpt-5.4
+  provider: "openai"                # anthropic | openai
+  model: "gpt-5.4"  # Agent generation model (fast + cheap)
   npc_quality_level: "moderate"
   save_raw_logs: true
   raw_log_dir: "data/concordia_trajectories"

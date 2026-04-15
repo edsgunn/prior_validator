@@ -1,0 +1,54 @@
+experiment:
+  name: "negotiation_human_prior_validation"
+  seed: 42
+  output_dir: "results/negotiation_human"
+
+environment:
+  type: negotiation
+  use_human_data: true
+  data_dir: "human_data/negotiation"
+  split: "train"
+  trajectory_counts:
+    disagreement: 50
+    poor: 50
+    good: 50
+    optimal: 50
+  formats:
+    - human
+  counterfactual:
+    n_edits_per_trajectory: 0  # No counterfactual editing for human data
+    n_sample_trajectories: 0
+  outcome_probe: false
+
+prompts:
+  negotiator:
+    text: "You are a skilled negotiator. You aim to maximise your own score while reaching mutually beneficial agreements."
+    aligned: true
+  cooperative:
+    text: "You are a fair-minded person who values equitable outcomes above personal gain."
+  aggressive:
+    text: "You are a ruthless negotiator who will accept nothing less than the best possible deal for yourself."
+  neutral:
+    text: "The following is a negotiation between two people dividing items."
+  mismatched:
+    text: "You are a chess grandmaster."
+    mismatched: true
+
+analysis:
+  quality_metrics:
+    - q_individual
+    - q_pareto
+    - q_deal
+  surprise_types:
+    - cumulative
+    - normalised
+    - residualised
+  semantic_filters:
+    - all
+    - opponent_utterance
+    - outcome
+  correlation_method: spearman
+  bootstrap_n: 1000
+  confidence_level: 0.95
+  permutation_null_n: 1000
+  failure_mode_top_n: 20

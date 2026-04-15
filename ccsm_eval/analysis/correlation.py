@@ -24,6 +24,7 @@ class CorrelationResult:
 
     prompt_id: str
     model_id: str
+    format_id: str                  # e.g. "fen", "natural", "templated"
     environment: str
     quality_metric: str            # e.g. "centipawn_eval", "q_pareto"
     surprise_type: str             # "cumulative", "normalised", "residualised"
@@ -104,11 +105,13 @@ def compute_correlation(
 
     prompt_id = results[0].prompt_id if results else ""
     model_id = results[0].model_id if results else ""
+    format_id = results[0].metadata.get("format", "") if results else ""
     environment = results[0].environment if results else ""
 
     return CorrelationResult(
         prompt_id=prompt_id,
         model_id=model_id,
+        format_id=format_id,
         environment=environment,
         quality_metric=quality_metric,
         surprise_type=surprise_type,

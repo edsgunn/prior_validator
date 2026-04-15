@@ -27,16 +27,17 @@ def correlation_table_latex(
         r"\centering",
         r"\caption{" + caption + "}",
         r"\label{" + label + "}",
-        r"\begin{tabular}{lllllllrrrrr}",
+        r"\begin{tabular}{llllllllrrrrr}",
         r"\toprule",
-        r"Env & Model & Prompt & Quality & Surprise & Semantic & $\rho$ & $p$ & CI$_{95}$ & Perm-$p$ & $n$ \\",
+        r"Env & Model & Format & Prompt & Quality & Surprise & Semantic & $\rho$ & $p$ & CI$_{95}$ & Perm-$p$ & $n$ \\",
         r"\midrule",
     ]
 
     for r in results:
         ci = f"[{_fmt(r.ci_low)}, {_fmt(r.ci_high)}]"
+        fmt = getattr(r, "format_id", "")
         lines.append(
-            f"{r.environment} & {r.model_id} & {r.prompt_id} & {r.quality_metric} & "
+            f"{r.environment} & {r.model_id} & {fmt} & {r.prompt_id} & {r.quality_metric} & "
             f"{r.surprise_type} & {r.semantic_filter} & {_fmt(r.rho)} & {_fmt(r.p_value)} & "
             f"{ci} & {_fmt(r.permutation_p)} & {r.n_trajectories} \\\\"
         )
@@ -169,15 +170,16 @@ def summary_text_report(all_results: dict, metadata: Optional[dict] = None) -> s
         lines.append("CORRELATION RESULTS")
         lines.append("-" * 40)
         lines.append(
-            f"  {'':2s} {'env':12s} | {'model':20s} | {'prompt':12s} | "
+            f"  {'':2s} {'env':12s} | {'model':20s} | {'format':10s} | {'prompt':12s} | "
             f"{'quality':20s} | {'surprise':12s} | {'semantic':18s} | "
             f"{'ρ':>7s}  {'p':>7s}  CI"
         )
-        lines.append("  " + "-" * 120)
+        lines.append("  " + "-" * 130)
         for r in corr_results:
             sig = "**" if r.p_value < 0.05 else "  "
+            fmt = getattr(r, "format_id", "")
             lines.append(
-                f"  {sig} {r.environment:12s} | {r.model_id:20s} | {r.prompt_id:12s} | "
+                f"  {sig} {r.environment:12s} | {r.model_id:20s} | {fmt:10s} | {r.prompt_id:12s} | "
                 f"{r.quality_metric:20s} | {r.surprise_type:12s} | {r.semantic_filter:18s} | "
                 f"ρ={r.rho:+.3f}  p={r.p_value:.3f}  "
                 f"[{r.ci_low:+.3f},{r.ci_high:+.3f}]"
